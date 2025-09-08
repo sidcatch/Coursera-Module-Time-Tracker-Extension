@@ -10,7 +10,9 @@ class CourseraTimeTracker {
 
     init() {
         this.extractCourseInfo();
-        this.waitForPageLoad();
+        if (this.currentModule) {
+            this.waitForPageLoad();
+        }
     }
 
     extractCourseInfo() {
@@ -21,22 +23,26 @@ class CourseraTimeTracker {
             this.courseSlug = match[1];
             this.currentModule = match[2];
             this.storageKey = `coursera_${this.courseSlug}`;
+            console.log(
+                `Coursera Time Tracker: Detected course ${this.courseSlug}, module ${this.currentModule}`,
+            );
         }
     }
 
     waitForPageLoad() {
-        // Wait for the page content to load
-        const observer = new MutationObserver((mutations, obs) => {
-            const moduleContent = document.querySelector(
-                '[data-test="rc-periodPage"]',
-            );
-            const sidebar = document.querySelector('nav[aria-label="Course"]');
+        // Simple timeout approach - wait for page to stabilize
+        setTimeout(() => {
+            this.extractAndSaveModuleTime();
+            this.updateSidebar();
+        }, 2000);
 
-            if (moduleContent && sidebar) {
-                obs.disconnect();
-                this.extractModuleTime();
+        // Also try after mutations settle
+        const observer = new MutationObserver(() => {
+            clearTimeout(this.timeoutId);
+            this.timeoutId = setTimeout(() => {
+                this.extractAndSaveModuleTime();
                 this.updateSidebar();
-            }
+            }, 1000);
         });
 
         observer.observe(document.body, {
@@ -44,17 +50,24 @@ class CourseraTimeTracker {
             subtree: true,
         });
 
-        // Fallback timeout
-        setTimeout(() => {
-            observer.disconnect();
-            this.extractModuleTime();
-            this.updateSidebar();
-        }, 5000);
+        // Clean up observer after 10 seconds
+        setTimeout(() => observer.disconnect(), 10000);
     }
 
-    extractModuleTime() {
+    extractAndSaveModuleTime() {
+        // Get the CURRENT module from URL at time of extraction
+        const currentUrl = window.location.href;
+        const moduleMatch = currentUrl.match(/\/home\/module\/(\d+)/);
+
+        if (!moduleMatch) {
+            console.log('Coursera Time Tracker: Not on a module page');
+            return;
+        }
+
+        const actualCurrentModule = moduleMatch[1];
+
         try {
-            // Look for the time indicators in the module overview
+            // Look for the time indicators
             const timeElements = document.querySelectorAll(
                 '.css-md7uya .css-vyoujf',
             );
@@ -75,11 +88,21 @@ class CourseraTimeTracker {
                 }
             });
 
+            console.log(
+                `Coursera Time Tracker: Found times for module ${actualCurrentModule}:`,
+                { videoTime, readingTime },
+            );
+
             if (videoTime || readingTime) {
-                this.saveModuleTime(this.currentModule, {
+                // Save data for the ACTUAL current module, not the initially detected one
+                this.saveModuleTime(actualCurrentModule, {
                     videoTime,
                     readingTime,
                 });
+            } else {
+                console.log(
+                    'Coursera Time Tracker: No time data found on page',
+                );
             }
         } catch (error) {
             console.log('Coursera Time Tracker: Error extracting time', error);
@@ -98,8 +121,8 @@ class CourseraTimeTracker {
 
             await chrome.storage.local.set({ [this.storageKey]: courseData });
             console.log(
-                'Coursera Time Tracker: Saved time data for module',
-                moduleNumber,
+                `Coursera Time Tracker: Saved data for module ${moduleNumber}:`,
+                timeData,
             );
         } catch (error) {
             console.log('Coursera Time Tracker: Error saving data', error);
