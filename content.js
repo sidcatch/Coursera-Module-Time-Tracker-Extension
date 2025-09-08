@@ -1,4 +1,13 @@
-// Coursera Module Time Tracker Content Script
+const COURSERA_TRACKER_CONFIG = {
+    // Set to true to store data only once per module (never update)
+    // Set to false to always update data when visiting modules
+    STORE_ONCE_ONLY: true,
+
+    // Other configurable options
+    EXTRACTION_DELAY: 2000,
+    MUTATION_DELAY: 1000,
+    DEBUG_LOGGING: true,
+};
 
 class CourseraTimeTracker {
     constructor() {
@@ -44,7 +53,7 @@ class CourseraTimeTracker {
                 this.extractAndSaveModuleTime();
             }
             this.updateSidebar();
-        }, 2000);
+        }, COURSERA_TRACKER_CONFIG.EXTRACTION_DELAY);
 
         // Also try after mutations settle
         const observer = new MutationObserver(() => {
@@ -56,7 +65,7 @@ class CourseraTimeTracker {
                     this.extractAndSaveModuleTime();
                 }
                 this.updateSidebar();
-            }, 1000);
+            }, COURSERA_TRACKER_CONFIG.MUTATION_DELAY);
         });
 
         observer.observe(document.body, {
@@ -81,22 +90,36 @@ class CourseraTimeTracker {
         const moduleMatch = currentUrl.match(/\/home\/module\/(\d+)/);
 
         if (!moduleMatch) {
-            console.log('Coursera Time Tracker: Not on a module page');
+            if (COURSERA_TRACKER_CONFIG.DEBUG_LOGGING) {
+                console.log('Coursera Time Tracker: Not on a module page');
+            }
             this.isExtracting = false;
             return;
         }
 
         const actualCurrentModule = moduleMatch[1];
 
-        // Check if we already saved this module recently
-        if (this.lastSavedModule === actualCurrentModule) {
-            console.log(
-                `Coursera Time Tracker: Already saved data for module ${actualCurrentModule}, skipping`,
-            );
-            this.isExtracting = false;
-            return;
+        // CHECK IF DATA ALREADY EXISTS - only if STORE_ONCE_ONLY is enabled
+        if (COURSERA_TRACKER_CONFIG.STORE_ONCE_ONLY) {
+            this.checkExistingData(actualCurrentModule).then((dataExists) => {
+                if (dataExists) {
+                    if (COURSERA_TRACKER_CONFIG.DEBUG_LOGGING) {
+                        console.log(
+                            `Coursera Time Tracker: Data already exists for module ${actualCurrentModule}, skipping extraction`,
+                        );
+                    }
+                    this.isExtracting = false;
+                    return;
+                }
+                this.performExtraction(actualCurrentModule);
+            });
+        } else {
+            // Always extract and potentially update data
+            this.performExtraction(actualCurrentModule);
         }
+    }
 
+    performExtraction(actualCurrentModule) {
         try {
             // Look for the time indicators
             const timeElements = document.querySelectorAll(
@@ -120,19 +143,25 @@ class CourseraTimeTracker {
             });
 
             if (videoTime || readingTime) {
-                // Save data for the ACTUAL current module
                 this.saveModuleTime(actualCurrentModule, {
                     videoTime,
                     readingTime,
                 });
-                this.lastSavedModule = actualCurrentModule; // Remember what we saved
+                this.lastSavedModule = actualCurrentModule;
             } else {
-                console.log(
-                    'Coursera Time Tracker: No time data found on page',
-                );
+                if (COURSERA_TRACKER_CONFIG.DEBUG_LOGGING) {
+                    console.log(
+                        'Coursera Time Tracker: No time data found on page',
+                    );
+                }
             }
         } catch (error) {
-            console.log('Coursera Time Tracker: Error extracting time', error);
+            if (COURSERA_TRACKER_CONFIG.DEBUG_LOGGING) {
+                console.log(
+                    'Coursera Time Tracker: Error extracting time',
+                    error,
+                );
+            }
         } finally {
             this.isExtracting = false;
         }
@@ -149,12 +178,17 @@ class CourseraTimeTracker {
             };
 
             await chrome.storage.local.set({ [this.storageKey]: courseData });
-            console.log(
-                `Coursera Time Tracker: Saved data for module ${moduleNumber}:`,
-                timeData,
-            );
+
+            if (COURSERA_TRACKER_CONFIG.DEBUG_LOGGING) {
+                console.log(
+                    `Coursera Time Tracker: Saved data for module ${moduleNumber}:`,
+                    timeData,
+                );
+            }
         } catch (error) {
-            console.log('Coursera Time Tracker: Error saving data', error);
+            if (COURSERA_TRACKER_CONFIG.DEBUG_LOGGING) {
+                console.log('Coursera Time Tracker: Error saving data', error);
+            }
         }
     }
 
