@@ -5,6 +5,9 @@ class CourseraTimeTracker {
         this.courseSlug = '';
         this.currentModule = '';
         this.storageKey = '';
+        this.isExtracting = false; // ADD THIS
+        this.lastSavedModule = null; // ADD THIS
+        this.timeoutId = null; // ADD THIS
         this.init();
     }
 
@@ -30,17 +33,28 @@ class CourseraTimeTracker {
     }
 
     waitForPageLoad() {
+        // Clear any existing timeout
+        if (this.timeoutId) {
+            clearTimeout(this.timeoutId);
+        }
+
         // Simple timeout approach - wait for page to stabilize
-        setTimeout(() => {
-            this.extractAndSaveModuleTime();
+        this.timeoutId = setTimeout(() => {
+            if (!this.isExtracting) {
+                this.extractAndSaveModuleTime();
+            }
             this.updateSidebar();
         }, 2000);
 
         // Also try after mutations settle
         const observer = new MutationObserver(() => {
-            clearTimeout(this.timeoutId);
+            if (this.timeoutId) {
+                clearTimeout(this.timeoutId);
+            }
             this.timeoutId = setTimeout(() => {
-                this.extractAndSaveModuleTime();
+                if (!this.isExtracting) {
+                    this.extractAndSaveModuleTime();
+                }
                 this.updateSidebar();
             }, 1000);
         });
@@ -55,16 +69,33 @@ class CourseraTimeTracker {
     }
 
     extractAndSaveModuleTime() {
+        // Prevent multiple simultaneous extractions
+        if (this.isExtracting) {
+            return;
+        }
+
+        this.isExtracting = true;
+
         // Get the CURRENT module from URL at time of extraction
         const currentUrl = window.location.href;
         const moduleMatch = currentUrl.match(/\/home\/module\/(\d+)/);
 
         if (!moduleMatch) {
             console.log('Coursera Time Tracker: Not on a module page');
+            this.isExtracting = false;
             return;
         }
 
         const actualCurrentModule = moduleMatch[1];
+
+        // Check if we already saved this module recently
+        if (this.lastSavedModule === actualCurrentModule) {
+            console.log(
+                `Coursera Time Tracker: Already saved data for module ${actualCurrentModule}, skipping`,
+            );
+            this.isExtracting = false;
+            return;
+        }
 
         try {
             // Look for the time indicators
@@ -88,17 +119,13 @@ class CourseraTimeTracker {
                 }
             });
 
-            console.log(
-                `Coursera Time Tracker: Found times for module ${actualCurrentModule}:`,
-                { videoTime, readingTime },
-            );
-
             if (videoTime || readingTime) {
-                // Save data for the ACTUAL current module, not the initially detected one
+                // Save data for the ACTUAL current module
                 this.saveModuleTime(actualCurrentModule, {
                     videoTime,
                     readingTime,
                 });
+                this.lastSavedModule = actualCurrentModule; // Remember what we saved
             } else {
                 console.log(
                     'Coursera Time Tracker: No time data found on page',
@@ -106,6 +133,8 @@ class CourseraTimeTracker {
             }
         } catch (error) {
             console.log('Coursera Time Tracker: Error extracting time', error);
+        } finally {
+            this.isExtracting = false;
         }
     }
 
