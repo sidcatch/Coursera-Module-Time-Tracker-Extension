@@ -88,13 +88,15 @@ class PopupManager {
         // Clear existing content
         moduleListEl.innerHTML = '';
 
-        // Sort modules by number
+        // Sort modules alphabetically by name
         const sortedModules = Object.entries(courseData)
-            .filter(([key]) => key.startsWith('module_'))
-            .sort(([a], [b]) => {
-                const numA = parseInt(a.split('_')[1]);
-                const numB = parseInt(b.split('_')[1]);
-                return numA - numB;
+            .filter(
+                ([key, data]) => data && (data.videoTime || data.readingTime),
+            )
+            .sort(([a, dataA], [b, dataB]) => {
+                const nameA = dataA.moduleName || a;
+                const nameB = dataB.moduleName || b;
+                return nameA.localeCompare(nameB);
             });
 
         if (sortedModules.length === 0) {
@@ -102,9 +104,8 @@ class PopupManager {
                 '<div class="empty-state">No module data found</div>';
         } else {
             sortedModules.forEach(([moduleKey, moduleData]) => {
-                const moduleNumber = moduleKey.split('_')[1];
                 const moduleItem = this.createModuleItem(
-                    moduleNumber,
+                    moduleData.moduleName || moduleKey,
                     moduleData,
                 );
                 moduleListEl.appendChild(moduleItem);
@@ -114,13 +115,13 @@ class PopupManager {
         courseInfoEl.style.display = 'block';
     }
 
-    createModuleItem(moduleNumber, moduleData) {
+    createModuleItem(moduleName, moduleData) {
         const item = document.createElement('div');
         item.className = 'module-item';
 
         const nameEl = document.createElement('div');
         nameEl.className = 'module-name';
-        nameEl.textContent = `Module ${moduleNumber}`;
+        nameEl.textContent = moduleName;
 
         const timeEl = document.createElement('div');
         timeEl.className = 'module-time';

@@ -27,6 +27,51 @@ class CourseraTimeTracker {
         }
     }
 
+    createModuleKey(moduleName) {
+        // Convert module name to a safe storage key
+        return moduleName
+            .toLowerCase()
+            .replace(/[^a-zA-Z0-9]/g, '_')
+            .replace(/_+/g, '_')
+            .replace(/^_|_$/g, '');
+    }
+
+    getCurrentModuleName() {
+        // Find the currently selected module in the sidebar
+        const currentModuleLink = document.querySelector(
+            'nav[aria-label="Course"] a[data-testid="rc-WeekNavigationItem"].css-1bzswin',
+        );
+
+        if (currentModuleLink) {
+            const moduleText = currentModuleLink.querySelector('.css-xkyeje');
+            if (moduleText) {
+                return moduleText.textContent.trim();
+            }
+        }
+
+        // Fallback: try to find any selected module link with different class patterns
+        const fallbackModuleLink = document.querySelector(
+            'nav[aria-label="Course"] a[data-testid="rc-WeekNavigationItem"][aria-label*="currently have this selected"]',
+        );
+
+        if (fallbackModuleLink) {
+            const moduleText = fallbackModuleLink.querySelector('.css-xkyeje');
+            if (moduleText) {
+                return moduleText.textContent.trim();
+            }
+        }
+
+        // Last fallback: try to extract from page content
+        const pageHeader = document.querySelector(
+            'h1, h2, [class*="module"], [class*="Module"]',
+        );
+        if (pageHeader && pageHeader.textContent.includes('Module')) {
+            return pageHeader.textContent.trim();
+        }
+
+        return null;
+    }
+
     extractCourseInfo() {
         const url = window.location.href;
         const match = url.match(/\/learn\/([^\/]+)\/home\/module\/(\d+)/);
@@ -98,14 +143,27 @@ class CourseraTimeTracker {
         }
 
         const actualCurrentModule = moduleMatch[1];
+        const currentModuleName = this.getCurrentModuleName();
+
+        if (!currentModuleName) {
+            if (COURSERA_TRACKER_CONFIG.DEBUG_LOGGING) {
+                console.log(
+                    'Coursera Time Tracker: Could not determine current module name',
+                );
+            }
+            this.isExtracting = false;
+            return;
+        }
+
+        const moduleKey = this.createModuleKey(currentModuleName);
 
         // CHECK IF DATA ALREADY EXISTS - only if STORE_ONCE_ONLY is enabled
         if (COURSERA_TRACKER_CONFIG.STORE_ONCE_ONLY) {
-            this.checkExistingData(actualCurrentModule).then((dataExists) => {
+            this.checkExistingData(moduleKey).then((dataExists) => {
                 if (dataExists) {
                     if (COURSERA_TRACKER_CONFIG.DEBUG_LOGGING) {
                         console.log(
-                            `Coursera Time Tracker: Data already exists for module ${actualCurrentModule}, skipping extraction`,
+                            `Coursera Time Tracker: Data already exists for ${currentModuleName}, skipping extraction`,
                         );
                     }
                     this.isExtracting = false;
@@ -119,11 +177,11 @@ class CourseraTimeTracker {
         }
     }
 
-    async checkExistingData(moduleNumber) {
+    async checkExistingData(moduleKey) {
         try {
             const result = await chrome.storage.local.get(this.storageKey);
             const courseData = result[this.storageKey] || {};
-            const moduleData = courseData[`module_${moduleNumber}`];
+            const moduleData = courseData[moduleKey];
 
             // Return true if data exists and has either video or reading time
             const dataExists =
@@ -131,7 +189,7 @@ class CourseraTimeTracker {
 
             if (COURSERA_TRACKER_CONFIG.DEBUG_LOGGING && dataExists) {
                 console.log(
-                    `Coursera Time Tracker: Found existing data for module ${moduleNumber}:`,
+                    `Coursera Time Tracker: Found existing data for ${moduleKey}:`,
                     moduleData,
                 );
             }
@@ -150,6 +208,19 @@ class CourseraTimeTracker {
 
     performExtraction(actualCurrentModule) {
         try {
+            const currentModuleName = this.getCurrentModuleName();
+            if (!currentModuleName) {
+                if (COURSERA_TRACKER_CONFIG.DEBUG_LOGGING) {
+                    console.log(
+                        'Coursera Time Tracker: Could not determine current module name',
+                    );
+                }
+                this.isExtracting = false;
+                return;
+            }
+
+            const moduleKey = this.createModuleKey(currentModuleName);
+
             // Look for the time indicators
             const timeElements = document.querySelectorAll(
                 '.css-md7uya .css-vyoujf',
@@ -172,11 +243,12 @@ class CourseraTimeTracker {
             });
 
             if (videoTime || readingTime) {
-                this.saveModuleTime(actualCurrentModule, {
+                this.saveModuleTime(moduleKey, {
                     videoTime,
                     readingTime,
+                    moduleName: currentModuleName,
                 });
-                this.lastSavedModule = actualCurrentModule;
+                this.lastSavedModule = moduleKey;
             } else {
                 if (COURSERA_TRACKER_CONFIG.DEBUG_LOGGING) {
                     console.log(
@@ -196,12 +268,12 @@ class CourseraTimeTracker {
         }
     }
 
-    async saveModuleTime(moduleNumber, timeData) {
+    async saveModuleTime(moduleKey, timeData) {
         try {
             const result = await chrome.storage.local.get(this.storageKey);
             const courseData = result[this.storageKey] || {};
 
-            courseData[`module_${moduleNumber}`] = {
+            courseData[moduleKey] = {
                 ...timeData,
                 lastUpdated: Date.now(),
             };
@@ -210,7 +282,7 @@ class CourseraTimeTracker {
 
             if (COURSERA_TRACKER_CONFIG.DEBUG_LOGGING) {
                 console.log(
-                    `Coursera Time Tracker: Saved data for module ${moduleNumber}:`,
+                    `Coursera Time Tracker: Saved data for ${moduleKey}:`,
                     timeData,
                 );
             }
@@ -246,11 +318,9 @@ class CourseraTimeTracker {
             const moduleText = link.querySelector('.css-xkyeje');
             if (!moduleText) return;
 
-            const moduleMatch = moduleText.textContent.match(/Module (\d+)/);
-            if (!moduleMatch) return;
-
-            const moduleNumber = moduleMatch[1];
-            const moduleData = courseData[`module_${moduleNumber}`];
+            const moduleName = moduleText.textContent.trim();
+            const moduleKey = this.createModuleKey(moduleName);
+            const moduleData = courseData[moduleKey];
 
             if (
                 moduleData &&
@@ -268,11 +338,11 @@ class CourseraTimeTracker {
                 const timeDisplay = document.createElement('div');
                 timeDisplay.className = 'coursera-time-tracker';
                 timeDisplay.style.cssText = `
-          font-size: 11px;
-          color: #666;
-          margin-top: 2px;
-          line-height: 1.2;
-        `;
+      font-size: 11px;
+      color: #666;
+      margin-top: 2px;
+      line-height: 1.2;
+    `;
 
                 const timeInfo = [];
                 if (moduleData.videoTime) {
@@ -284,13 +354,7 @@ class CourseraTimeTracker {
 
                 timeDisplay.textContent = timeInfo.join(' • ');
 
-                // Append to the module link
-                // const moduleContainer =
-                //     link.querySelector('.css-xkyeje').parentElement;
-                // if (moduleContainer) {
-                //     moduleContainer.appendChild(timeDisplay);
-                // }
-
+                // Append directly to the module link
                 link.appendChild(timeDisplay);
             }
         });
