@@ -7,6 +7,31 @@ const COURSERA_TRACKER_CONFIG = {
     EXTRACTION_DELAY: 2000,
     MUTATION_DELAY: 1000,
     DEBUG_LOGGING: true,
+
+    // CSS Selectors
+    SELECTORS: {
+        // Module navigation
+        CURRENT_MODULE_LINK:
+            'nav[aria-label="Course"] a[data-testid="rc-WeekNavigationItem"].css-1bzswin',
+        CURRENT_MODULE_FALLBACK:
+            'nav[aria-label="Course"] a[data-testid="rc-WeekNavigationItem"][aria-label*="currently have this selected"]',
+        MODULE_TEXT: '.css-xkyeje',
+        ALL_MODULE_LINKS:
+            'nav[aria-label="Course"] a[data-testid="rc-WeekNavigationItem"]',
+
+        // Time extraction
+        TIME_ELEMENTS: '.css-md7uya .css-vyoujf',
+
+        // Course material section
+        COURSE_MATERIAL_HEADER: 'nav[aria-label="Course"] .css-6ecy9b',
+
+        // Page header fallback
+        PAGE_HEADER: 'h1, h2, [class*="module"], [class*="Module"]',
+
+        // Extension classes
+        TIME_TRACKER_CLASS: '.coursera-time-tracker',
+        TOTAL_TIME_CLASS: '.coursera-total-time',
+    },
 };
 
 class CourseraTimeTracker {
@@ -39,11 +64,13 @@ class CourseraTimeTracker {
     getCurrentModuleName() {
         // Find the currently selected module in the sidebar
         const currentModuleLink = document.querySelector(
-            'nav[aria-label="Course"] a[data-testid="rc-WeekNavigationItem"].css-1bzswin',
+            COURSERA_TRACKER_CONFIG.SELECTORS.CURRENT_MODULE_LINK,
         );
 
         if (currentModuleLink) {
-            const moduleText = currentModuleLink.querySelector('.css-xkyeje');
+            const moduleText = currentModuleLink.querySelector(
+                COURSERA_TRACKER_CONFIG.SELECTORS.MODULE_TEXT,
+            );
             if (moduleText) {
                 return moduleText.textContent.trim();
             }
@@ -51,11 +78,13 @@ class CourseraTimeTracker {
 
         // Fallback: try to find any selected module link with different class patterns
         const fallbackModuleLink = document.querySelector(
-            'nav[aria-label="Course"] a[data-testid="rc-WeekNavigationItem"][aria-label*="currently have this selected"]',
+            COURSERA_TRACKER_CONFIG.SELECTORS.CURRENT_MODULE_FALLBACK,
         );
 
         if (fallbackModuleLink) {
-            const moduleText = fallbackModuleLink.querySelector('.css-xkyeje');
+            const moduleText = fallbackModuleLink.querySelector(
+                COURSERA_TRACKER_CONFIG.SELECTORS.MODULE_TEXT,
+            );
             if (moduleText) {
                 return moduleText.textContent.trim();
             }
@@ -63,7 +92,7 @@ class CourseraTimeTracker {
 
         // Last fallback: try to extract from page content
         const pageHeader = document.querySelector(
-            'h1, h2, [class*="module"], [class*="Module"]',
+            COURSERA_TRACKER_CONFIG.SELECTORS.PAGE_HEADER,
         );
         if (pageHeader && pageHeader.textContent.includes('Module')) {
             return pageHeader.textContent.trim();
@@ -223,7 +252,7 @@ class CourseraTimeTracker {
 
             // Look for the time indicators
             const timeElements = document.querySelectorAll(
-                '.css-md7uya .css-vyoujf',
+                COURSERA_TRACKER_CONFIG.SELECTORS.TIME_ELEMENTS,
             );
 
             let videoTime = '';
@@ -311,11 +340,13 @@ class CourseraTimeTracker {
     updateModuleTimes(courseData) {
         // Find all module links in the sidebar
         const moduleLinks = document.querySelectorAll(
-            'nav[aria-label="Course"] a[data-testid="rc-WeekNavigationItem"]',
+            COURSERA_TRACKER_CONFIG.SELECTORS.ALL_MODULE_LINKS,
         );
 
         moduleLinks.forEach((link) => {
-            const moduleText = link.querySelector('.css-xkyeje');
+            const moduleText = link.querySelector(
+                COURSERA_TRACKER_CONFIG.SELECTORS.MODULE_TEXT,
+            );
             if (!moduleText) return;
 
             const moduleName = moduleText.textContent.trim();
@@ -328,7 +359,7 @@ class CourseraTimeTracker {
             ) {
                 // Remove existing time display if any
                 const existingTimeDisplay = link.querySelector(
-                    '.coursera-time-tracker',
+                    COURSERA_TRACKER_CONFIG.SELECTORS.TIME_TRACKER_CLASS,
                 );
                 if (existingTimeDisplay) {
                     existingTimeDisplay.remove();
@@ -338,11 +369,11 @@ class CourseraTimeTracker {
                 const timeDisplay = document.createElement('div');
                 timeDisplay.className = 'coursera-time-tracker';
                 timeDisplay.style.cssText = `
-      font-size: 11px;
-      color: #666;
-      margin-top: 2px;
-      line-height: 1.2;
-    `;
+  font-size: 11px;
+  color: #666;
+  margin-top: 2px;
+  line-height: 1.2;
+`;
 
                 const timeInfo = [];
                 if (moduleData.videoTime) {
@@ -363,7 +394,7 @@ class CourseraTimeTracker {
     updateCourseTotalTime(courseData) {
         // Find the "Course Material" section
         const courseMaterialHeader = document.querySelector(
-            'nav[aria-label="Course"] .css-6ecy9b',
+            COURSERA_TRACKER_CONFIG.SELECTORS.COURSE_MATERIAL_HEADER,
         );
         if (
             !courseMaterialHeader ||
@@ -392,7 +423,7 @@ class CourseraTimeTracker {
             // Remove existing total time display
             const existingTotal =
                 courseMaterialHeader.parentElement.querySelector(
-                    '.coursera-total-time',
+                    COURSERA_TRACKER_CONFIG.SELECTORS.TOTAL_TIME_CLASS,
                 );
             if (existingTotal) {
                 existingTotal.remove();
@@ -402,12 +433,12 @@ class CourseraTimeTracker {
             const totalDisplay = document.createElement('div');
             totalDisplay.className = 'coursera-total-time';
             totalDisplay.style.cssText = `
-        font-size: 11px;
-        color: #666;
-        margin-top: 4px;
-        line-height: 1.2;
-        font-weight: normal;
-      `;
+    font-size: 11px;
+    color: #666;
+    margin-top: 4px;
+    line-height: 1.2;
+    font-weight: normal;
+  `;
 
             const totalInfo = [];
             if (totalVideoMinutes > 0) {
