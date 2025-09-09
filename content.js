@@ -119,6 +119,35 @@ class CourseraTimeTracker {
         }
     }
 
+    async checkExistingData(moduleNumber) {
+        try {
+            const result = await chrome.storage.local.get(this.storageKey);
+            const courseData = result[this.storageKey] || {};
+            const moduleData = courseData[`module_${moduleNumber}`];
+
+            // Return true if data exists and has either video or reading time
+            const dataExists =
+                moduleData && (moduleData.videoTime || moduleData.readingTime);
+
+            if (COURSERA_TRACKER_CONFIG.DEBUG_LOGGING && dataExists) {
+                console.log(
+                    `Coursera Time Tracker: Found existing data for module ${moduleNumber}:`,
+                    moduleData,
+                );
+            }
+
+            return dataExists;
+        } catch (error) {
+            if (COURSERA_TRACKER_CONFIG.DEBUG_LOGGING) {
+                console.log(
+                    'Coursera Time Tracker: Error checking existing data',
+                    error,
+                );
+            }
+            return false;
+        }
+    }
+
     performExtraction(actualCurrentModule) {
         try {
             // Look for the time indicators
