@@ -285,11 +285,13 @@ class CourseraTimeTracker {
                 timeDisplay.textContent = timeInfo.join(' • ');
 
                 // Append to the module link
-                const moduleContainer =
-                    link.querySelector('.css-xkyeje').parentElement;
-                if (moduleContainer) {
-                    moduleContainer.appendChild(timeDisplay);
-                }
+                // const moduleContainer =
+                //     link.querySelector('.css-xkyeje').parentElement;
+                // if (moduleContainer) {
+                //     moduleContainer.appendChild(timeDisplay);
+                // }
+
+                link.appendChild(timeDisplay);
             }
         });
     }
