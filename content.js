@@ -373,6 +373,9 @@ class CourseraTimeTracker {
   color: #666;
   margin-top: 2px;
   line-height: 1.2;
+  position: absolute;
+  top: 1.7rem;
+  left: 4.7rem;
 `;
 
                 const timeInfo = [];
@@ -385,7 +388,7 @@ class CourseraTimeTracker {
 
                 timeDisplay.textContent = timeInfo.join(' • ');
 
-                // Append directly to the module link
+                link.style.position = 'relative';
                 link.appendChild(timeDisplay);
             }
         });
